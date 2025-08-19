@@ -1,4 +1,5 @@
 import warnings
+import json
 import pandas as pd
 import numpy as np
 import torch
@@ -12,19 +13,46 @@ from pytorch_forecasting.metrics import QuantileLoss
 warnings.filterwarnings("ignore")
 
 def load_and_prepare_data(file_path):
-    """Loads data, adds necessary columns, and returns a DataFrame."""
+    """Loads data from JSON, adds necessary columns, and returns a DataFrame."""
     try:
-        data = pd.read_csv(file_path)
+        with open(file_path, 'r') as f:
+            json_data = json.load(f)
     except FileNotFoundError:
         print(f"Error: The file '{file_path}' was not found.")
         return None
+    except json.JSONDecodeError:
+        print(f"Error: Could not decode JSON from the file '{file_path}'.")
+        return None
+
+    if json_data.get("s") != "ok":
+        print("Error: JSON data status is not 'ok'.")
+        return None
+
+    # Ensure all data arrays are of the same length by truncating to the shortest
+    keys = ['t', 'o', 'h', 'l', 'c', 'v']
+    try:
+        min_len = min(len(json_data[key]) for key in keys)
+    except KeyError as e:
+        print(f"Error: JSON data is missing a required key: {e}")
+        return None
+
+    truncated_json_data = {key: json_data[key][:min_len] for key in keys}
+
+    # Create a DataFrame from the truncated data
+    data = pd.DataFrame({
+        'Date': pd.to_datetime(truncated_json_data['t'], unit='s'),
+        'Open': truncated_json_data['o'],
+        'High': truncated_json_data['h'],
+        'Low': truncated_json_data['l'],
+        'Close': truncated_json_data['c'],
+        'Volume': truncated_json_data['v']
+    })
 
     # Convert relevant columns to float
     for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
         data[col] = data[col].astype(np.float32)
 
-    # Convert 'Date' to datetime and create a time index
-    data['Date'] = pd.to_datetime(data['Date'])
+    # Sort by date
     data = data.sort_values('Date')
     data['time_idx'] = (data['Date'] - data['Date'].min()).dt.days
 
@@ -33,7 +61,7 @@ def load_and_prepare_data(file_path):
 
     return data
 
-def main(file_path='USDT_IRT.csv', epochs=10):
+def main(file_path='USDT_IRT.json', epochs=10):
     """Main function to run the stock forecasting process."""
     data = load_and_prepare_data(file_path)
     if data is None:
