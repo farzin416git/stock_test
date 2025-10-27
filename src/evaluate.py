@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from src.model import ParallelCNNLSTM
-from src.config import BATCH_SIZE, DEVICE
+from src.config import BATCH_SIZE, DEVICE, HORIZON
 
 def mae_np(y_true, y_pred):
     return np.mean(np.abs(y_true - y_pred))
