@@ -27,20 +27,11 @@ def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> 
     signal_line = ema(macd_line, signal)
     return macd_line, signal_line
 
-def load_json_timeseries(path: str) -> pd.DataFrame:
-    """Load JSON with keys t,o,h,l,c,v into DataFrame with datetime index."""
-    with open(path, 'r') as f:
-        j = json.load(f)
-    df = pd.DataFrame({
-        't': pd.to_datetime(j['t'], unit='s', utc=True) if isinstance(j['t'][0], (int, float)) else pd.to_datetime(j['t']),
-        'o': j['o'],
-        'h': j.get('h', [np.nan]*len(j['t'])),
-        'l': j.get('l', [np.nan]*len(j['t'])),
-        'c': j['c'],
-        'v': j.get('v', [np.nan]*len(j['t'])),
-    })
-    df = df.set_index('t').sort_index()
-    return df
+def load_csv_timeseries(path: str) -> pd.DataFrame:
+    """Load CSV with columns time,open,high,low,close,volume into DataFrame with datetime index."""
+    df = pd.read_csv(path, parse_dates=['time'], index_col='time')
+    df = df.rename(columns={'open': 'o', 'high': 'h', 'low': 'l', 'close': 'c', 'volume': 'v'})
+    return df.sort_index()
 
 def align_currencies(dfs: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
     """Align timestamps by union of indices and forward-fill missing values for each currency."""
@@ -125,18 +116,18 @@ def normalize_per_currency(aligned_dfs: Dict[str, pd.DataFrame], feature_names: 
     return normalized, scalers
 
 def load_and_process_data():
-    from src.config import DATA_FOLDER, EVAL_JSON
-    json_paths = sorted(glob(os.path.join(DATA_FOLDER, '*.json')))
-    if not json_paths:
-        raise RuntimeError(f"No JSON files found in {DATA_FOLDER}.")
-    print(f"Found {len(json_paths)} currency files for training.")
+    from src.config import DATA_CSV_FOLDER, EVAL_CSV
+    csv_paths = sorted(glob(os.path.join(DATA_CSV_FOLDER, '*.csv')))
+    if not csv_paths:
+        raise RuntimeError(f"No CSV files found in {DATA_CSV_FOLDER}.")
+    print(f"Found {len(csv_paths)} currency files for training.")
 
-    train_dfs = {os.path.splitext(os.path.basename(p))[0]: load_json_timeseries(p) for p in json_paths}
+    train_dfs = {os.path.splitext(os.path.basename(p))[0]: load_csv_timeseries(p) for p in csv_paths if 'eval' not in p}
 
-    if not os.path.exists(EVAL_JSON):
-        raise RuntimeError(f"Evaluation JSON not found: {EVAL_JSON}")
-    eval_name = os.path.splitext(os.path.basename(EVAL_JSON))[0]
-    eval_df_raw = load_json_timeseries(EVAL_JSON)
+    if not os.path.exists(EVAL_CSV):
+        raise RuntimeError(f"Evaluation CSV not found: {EVAL_CSV}")
+    eval_name = os.path.splitext(os.path.basename(EVAL_CSV))[0]
+    eval_df_raw = load_csv_timeseries(EVAL_CSV)
     print(f"Loaded evaluation currency: {eval_name}, length {len(eval_df_raw)}")
 
     combined = {**train_dfs, eval_name: eval_df_raw}

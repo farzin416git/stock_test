@@ -1,9 +1,10 @@
 import torch
 import numpy as np
-from src.config import MODEL_SAVE_PATH, RANDOM_SEED
+from src.config import MODEL_SAVE_PATH, RANDOM_SEED, HORIZON
 from src.data_processing import load_and_process_data, build_multi_currency_array, create_samples, create_targets_for_currency
 from src.train import find_best_sequence_length, train_model
 from src.evaluate import evaluate_and_plot
+from src.predict import predict_future
 from sklearn.model_selection import train_test_split
 
 def main():
@@ -15,8 +16,8 @@ def main():
 
     best_seq = find_best_sequence_length(data_arr)
 
-    X_all, idx_array = create_samples(data_arr, seq_len=best_seq, horizon=2)
-    y_all = create_targets_for_currency({**{k: all_features[k] for k in train_norm.keys()}, eval_name: all_features[eval_name]}, eval_name, idx_array, horizon=2)
+    X_all, idx_array = create_samples(data_arr, seq_len=best_seq, horizon=HORIZON)
+    y_all = create_targets_for_currency({**{k: all_features[k] for k in train_norm.keys()}, eval_name: all_features[eval_name]}, eval_name, idx_array, horizon=HORIZON)
 
     mu, sd = scalers[eval_name]['c']['mu'], scalers[eval_name]['c']['sd']
     y_all_norm = (y_all - mu) / sd
@@ -32,6 +33,14 @@ def main():
     print(f"Saved trained model to {MODEL_SAVE_PATH}")
 
     evaluate_and_plot(best_model_state, scalers, feature_names, best_seq, var_names, X_all, idx_array, eval_name, all_features, index)
+
+    # Predict the future
+    last_sequence = data_arr[:, -best_seq:]
+    future_preds = predict_future(best_model_state, scalers, feature_names, best_seq, var_names, last_sequence, horizon=HORIZON)
+
+    print("\nFuture Predictions:")
+    for i, pred in enumerate(future_preds):
+        print(f"  Step {i+1}: {pred:.6f}")
 
 if __name__ == '__main__':
     main()
